@@ -1,0 +1,30 @@
+---
+title: "Learning Motus"
+author: "Dave Eslinger"
+date: "5/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE,
+                      message = FALSE,
+                      error = FALSE)
+```
+
+```{r open-libraries}
+suppressPackageStartupMessages({
+  library(motus)
+library(motusData)
+library(tidyverse)
+library(here)
+library(maps)
+library(rworldmap)
+library(ggmap)
+})
+```
+
+```{r get-data}
+
+```
+
