@@ -15,16 +15,16 @@ knitr::opts_chunk$set(echo = TRUE,
 ```{r open-libraries}
 suppressPackageStartupMessages({
   library(motus)
-library(motusData)
-library(tidyverse)
-library(here)
-library(maps)
-library(rworldmap)
-library(ggmap)
+  library(motusData)
+  library(tidyverse)
+  library(here)
+  library(maps)
+  library(rworldmap)
+  library(ggmap)
 })
 ```
 
 ```{r get-data}
-
+Sys.setenv(TZ = "UTC")
 ```
 
