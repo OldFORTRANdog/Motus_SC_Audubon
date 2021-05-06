@@ -18,6 +18,9 @@ suppressPackageStartupMessages({
   library(motusData)
   library(tidyverse)
   library(here)
+  library(DBI)
+  library(RSQLite)
+  library(lubridate)
   library(maps)
   library(rworldmap)
   library(ggmap)
@@ -30,11 +33,218 @@ Sys.setenv(TZ = "UTC")
 
 Getting sample data, use "motus.sample" for user and password for this sample data.  If you screw it up, use `motusLogout()`.
 
-```{r get_test_data}
+```{r get_test_project_data}
 proj.num <- 176
 sql.motus <- tagme(projRecv = proj.num, 
                    new = FALSE, 
                    update = TRUE, 
                    dir = here("data"))
+
+```
+
+Or to get data by receiver (none available for test data)
+
+```{r get_one_receiver_data}
+# proj.num <- "SG-123BBBK1234"
+# sql.motus <- tagme(projRecv = proj.num, new = TRUE, update = TRUE)
+```
+
+Or for multiple receivers (what I'll need for the SC work) Also won't work!
+```{r get_all_receivers_in_project_data}
+# # specify the project whose receivers you wish to download:
+# proj.num <- 176
+# 
+# # get a copy of the metadata only
+# sql.motus <- tagme(proj.num, new = TRUE, update = FALSE, dir = here("data"))
+# metadata(sql.motus, proj.num)
+# tbl.recvDeps <- tbl(sql.motus, "recvDeps")
+# 
+# df.serno <- tbl.recvDeps %>% 
+#   filter(projectID == proj.num) %>% 
+#   select(serno) %>% 
+#   distinct() %>% 
+#   collect() %>% as.data.frame()
+# 
+# # loop through each receiver (may take a while!)
+# for (row in 1:nrow(df.serno)) {
+#   tagme(df.serno[row, "serno"], dir = here("data"), new = TRUE, update = TRUE)
+# }
+# 
+# # Note you can remove the dir argument if you want to save it to your working
+# # directory, just make sure that you use the same directory in both calls
+```
+
+Or you can get select receivers, again won't work for testing.  Also what would work for SC QA/QC work.
+
+```{r get_select_receivers_in_project_data}
+# # create list of receivers you'd like to download
+# df.serno <- c("SG-AB12RPI3CD34", "SG-1234BBBK4321"))
+# 
+# # loop through each receiver (may take a while!), and save to the working directory
+# for (k in 1:length(df.serno)) {
+#   tagme(df.serno[k], new = TRUE, update = TRUE)
+# }
+# 
+# # loop through each receiver (may take a while!), and save to a specified directory
+# for (k in 1:length(df.serno)) {
+#   tagme(df.serno[k], dir = "/Users/zoecrysler/Downloads/", 
+#         new = TRUE, update = TRUE)
+# }
+```
+
+
+```{r update_existing_receiver_data}
+# # If you have them saved your working directory:
+# tagme()
+
+# # If you have them saved in a different directory:
+# tagme(dir = here("data"))
+```
+
+```{r check_SQL_tables}
+
+
+# specify the filepath where your .motus file is saved, and the file name.
+file.name <- dbConnect(SQLite(), here("data","project-176.motus"))
+
+# get a list of tables in the .motus file specified above.
+dbListTables(file.name) 
+
+dbListFields(file.name, "hits")
+
+tbl.alltags <- tbl(sql.motus, "alltags")
+
+str(tbl.alltags)
+
+tbl.alltags %>% 
+  collect() %>%
+  names() # list the variable names in the table
+
+
+
+```
+
+If GPS data are needed, use alltagsGPS.  Adding GPS to everything can be slow.
+**NOTE BENE: There are no GPS data in the sample data set, so none of this works**
+```{r get_SQL_tables_with_GPS}
+tbl.alltagsGPS <- tbl(sql.motus, "alltagsGPS")
+tbl.alltagsGPS %>% 
+  collect() %>%
+  names() # list the variable names in the table
+
+tbDunlin <- collect(tbl.alltagsGPS) %>% 
+  # collect() %>% 
+  filter(speciesEN == "Dunlin")
+
+names(tbDunlin)
+
+all(is.na(tbDunlin$gpsLat))
+
+```
+
+
+```{r filter_SQL_tables_then_get_GPS}
+# Filter the data
+tbl.Dunlin <- tbl(sql.motus, "alltags") %>%
+  filter(speciesEN == "Dunlin") %>%
+  collect()
+
+tbl.Dunlin %>% 
+  # collect() %>%
+  names() 
+
+class(tbl.Dunlin)
+
+# Get the daily median location of GPS points for these data
+Dunlin.GPS <- getGPS(src = sql.motus, data = tbl.Dunlin)
+class(Dunlin.GPS)
+str(Dunlin.GPS)
+
+Dunlin.GPS <- getGPS(src = sql.motus, data = tbl.Dunlin, by = 60)
+Dunlin.GPS <- getGPS(src = sql.motus, data = tbl.Dunlin, by = "closest", cutoff = 120)
+Dunlin.GPS <- getGPS(src = sql.motus, data = tbl.Dunlin, keepAll = TRUE)
+
+
+```
+
+COnvert to data frame to make things more _normal_.
+
+```{r convert_to_dataframe}
+df.alltags <- tbl.alltags %>% 
+  collect() %>% 
+  as.data.frame()
+
+names(df.alltags)     # field names
+str(df.alltags)       # structure of your data fields
+head(df.alltags)      # prints the first 6 rows of your df to the console
+summary(df.alltags)   # summary of each column in your df
+
+```
+Timestamp (`ts`) is seconds since Jan. 1970.  Convert to datetime with {lubridate}.
+
+```{r convert_to_df_and_fix_time}
+
+df.alltags <- tbl.alltags %>% 
+  collect() %>% 
+  as.data.frame() %>%     # for all fields in the df (data frame)
+  mutate(ts = as_datetime(ts, tz = "UTC", origin = "1970-01-01"))
+```
+
+Can load subsets of full table using {dplyr}.
+
+Can select just some variables:
+
+```{r load_select_variables}
+# to grab a subset of variables, in this case a unique list of Motus tag IDs at
+# each receiver and antenna.
+df.alltagsSub <- tbl.alltags %>%
+  select(recv, port, motusTagID) %>%
+  distinct() %>% 
+  collect() %>% 
+  as.data.frame() 
+
+names(df.alltagsSub)     # field names
+str(df.alltagsSub)       # structure of your data fields
+head(df.alltagsSub)      # prints the first 6 rows of your df to the console
+summary(df.alltagsSub)   # summary of each column in your df
+
+```
+
+Or some tag IDs:
+
+```{r load_select_tag_IDs}
+# filter to include only motusTagIDs 16011, 23316
+df.alltagsSub <- tbl.alltags %>%
+  filter(motusTagID %in% c(16011, 23316)) %>% 
+  collect() %>% 
+  as.data.frame() %>%    
+  mutate(ts = as_datetime(ts, tz = "UTC", origin = "1970-01-01"))    
+
+names(df.alltagsSub)     # field names
+str(df.alltagsSub)       # structure of your data fields
+head(df.alltagsSub)      # prints the first 6 rows of your df to the console
+summary(df.alltagsSub)   # summary of each column in your df
+
+```
+
+or species, by speciesID or English name:
+
+```{r load_select_species_IDs}
+# filter to only Red Knot (using speciesID)
+df.4670 <- tbl.alltags %>%
+  filter(speciesID == 4670) %>%  
+  collect() %>% 
+  as.data.frame() %>%    
+  mutate(ts = as_datetime(ts, tz = "UTC", origin = "1970-01-01"))  
+
+# filter to only Red Knot (using English name)
+df.redKnot <- tbl.alltags %>%
+  filter(speciesEN == "Red Knot") %>%   
+  collect() %>% 
+  as.data.frame() %>%    
+  mutate(ts = as_datetime(ts, tz = "UTC", origin = "1970-01-01"))    
+df.4670 ==df.redKnot
+
+
 ```
 
