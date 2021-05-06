@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE,
                       error = FALSE)
 ```
 
-```{r open-libraries}
+```{r open_libraries}
 suppressPackageStartupMessages({
   library(motus)
   library(motusData)
@@ -24,7 +24,17 @@ suppressPackageStartupMessages({
 })
 ```
 
-```{r get-data}
+```{r set_environment}
 Sys.setenv(TZ = "UTC")
+```
+
+Getting sample data, use "motus.sample" for user and password for this sample data.  If you screw it up, use `motusLogout()`.
+
+```{r get_test_data}
+proj.num <- 176
+sql.motus <- tagme(projRecv = proj.num, 
+                   new = FALSE, 
+                   update = TRUE, 
+                   dir = here("data"))
 ```
 
