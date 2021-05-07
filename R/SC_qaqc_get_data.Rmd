@@ -1,0 +1,92 @@
+---
+title: "Exploring Audubon SC Motus"
+author: "Dave Eslinger"
+date: "5/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      cache = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+```{r open_libraries}
+suppressPackageStartupMessages({
+  library(motus)
+  library(motusData)
+  library(tidyverse)
+  library(here)
+  library(DBI)
+  library(RSQLite)
+  library(lubridate)
+})
+```
+
+```{r set_environment}
+Sys.setenv(TZ = "UTC")
+theme_set(theme_light())
+```
+
+Need to login, so run this next section manually. If you screw it up, use `motusLogout()`.
+
+```{r get_one_receiver_data}
+proj.num <- "SG-329ERPI3DD60"
+sc_rcvr.motus <- tagme(projRecv = proj.num,
+                       new = FALSE,
+                       update = TRUE,
+                       dir = here("data"))
+
+
+```
+
+```{r check_SQL_tables}
+# specify the filepath where your .motus file is saved, and the file name.
+sql.file <- dbConnect(SQLite(), 
+                      here("data","SG-329ERPI3DD60.motus"))
+
+# get a list of tables in the .motus file specified above.
+dbListTables(sql.file) 
+
+dbListFields(sql.file, "hits")
+
+```
+
+No GPS for this receiver, so don't try to get any.
+
+
+Convert to data frame to make things more _normal_, loading only some of the attributes.
+
+Timestamp (`ts`) is seconds since Jan. 1970.  Convert to datetime with {lubridate}.
+
+```{r convert_to_df_and_fix_time}
+# tbl.alltags <- tbl(sc_rcvr.motus, "alltags")
+tbl.alltags <- tbl(sql.file, "alltags")
+# str(tbl.alltags)
+
+# tbl.alltags %>% 
+#   collect() %>%
+#   names() # list the variable names in the table
+
+df.alltags <- tbl.alltags %>% 
+  select(-c(tsCorrected, deviceID:antHeight)) %>%
+  collect() %>% 
+  as.data.frame() %>%     # for all fields in the df (data frame)
+  mutate(ts = as_datetime(ts, tz = "UTC", origin = "1970-01-01"),
+         obs_date = as.Date(ts),
+         isJune30 = ifelse(obs_date == "2020-06-30","June 30","Not June 30"),
+         isBigCount = ifelse((obs_date == "2020-06-30") |
+                             (obs_date == "2020-06-25") |
+                             (obs_date == "2020-06-23"),
+                             "is Big Count","Not Big Count"))
+saveRDS(df.alltags, here("data","Dewes_alltags.rds"))
+
+# names(df.alltags)     # field names
+# str(df.alltags)       # structure of your data fields
+# head(df.alltags)      # prints the first 6 rows of your df to the console
+# tail(df.alltags)
+# summary(df.alltags)   # summary of each column in your df
+# 
+# all(is.na(df.alltags$speciesEN))
+```

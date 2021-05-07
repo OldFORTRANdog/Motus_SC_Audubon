@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE,
                       cache = TRUE,
                       message = FALSE,
-                      error = FALSE)
+                      warning = FALSE)
 ```
 
 ```{r open_libraries}
@@ -26,54 +26,31 @@ suppressPackageStartupMessages({
 
 ```{r set_environment}
 Sys.setenv(TZ = "UTC")
-theme_set(theme_light)
+theme_set(theme_light())
 ```
 
-Need to login, so run this next section manually. If you screw it up, use `motusLogout()`.
-
-```{r get_one_receiver_data}
-proj.num <- "SG-329ERPI3DD60"
-sc_rcvr.motus <- tagme(projRecv = proj.num, 
-                       new = FALSE,
-                       update = TRUE,
-                       dir = here("data"))
-
-
-```
-
-```{r check_SQL_tables}
-# specify the filepath where your .motus file is saved, and the file name.
-sql.file <- dbConnect(SQLite(), 
-                      here("data","SG-329ERPI3DD60.motus"))
-
-# get a list of tables in the .motus file specified above.
-dbListTables(sql.file) 
-
-dbListFields(sql.file, "hits")
-
-```
-
-No GPS for this receiver, so don't try to get any.
-
-
-Convert to data frame to make things more _normal_, loading only some of the attributes.
-
-Timestamp (`ts`) is seconds since Jan. 1970.  Convert to datetime with {lubridate}.
 
 ```{r convert_to_df_and_fix_time}
-# tbl.alltags <- tbl(sc_rcvr.motus, "alltags")
-tbl.alltags <- tbl(sql.file, "alltags")
-# str(tbl.alltags)
-
-# tbl.alltags %>% 
-#   collect() %>%
-#   names() # list the variable names in the table
-
-df.alltags <- tbl.alltags %>% 
-  select(-c(tsCorrected, deviceID:antHeight)) %>%
-  collect() %>% 
-  as.data.frame() %>%     # for all fields in the df (data frame)
-  mutate(ts = as_datetime(ts, tz = "UTC", origin = "1970-01-01"))
+# # tbl.alltags <- tbl(sc_rcvr.motus, "alltags")
+# tbl.alltags <- tbl(sql.file, "alltags")
+# # str(tbl.alltags)
+# 
+# # tbl.alltags %>% 
+# #   collect() %>%
+# #   names() # list the variable names in the table
+# 
+# df.alltags <- tbl.alltags %>% 
+#   select(-c(tsCorrected, deviceID:antHeight)) %>%
+#   collect() %>% 
+#   as.data.frame() %>%     # for all fields in the df (data frame)
+#   mutate(ts = as_datetime(ts, tz = "UTC", origin = "1970-01-01"),
+#          obs_date = as.Date(ts),
+#          isJune30 = ifelse(obs_date == "2020-06-30","June 30","Not June 30"),
+#          isBigCount = ifelse((obs_date == "2020-06-30") |
+#                              (obs_date == "2020-06-25") |
+#                              (obs_date == "2020-06-23"),
+#                              "is Big Count","Not Big Count"))
+df.alltags <- readRDS(here("data","Dewes_alltags.rds"))
 
 names(df.alltags)     # field names
 str(df.alltags)       # structure of your data fields
@@ -86,7 +63,6 @@ all(is.na(df.alltags$speciesEN))
 
 ```{r plot_hits_through_time}
 daily_hits <- df.alltags %>% 
-  mutate(obs_date = as.Date(ts)) %>% 
   group_by(obs_date) %>% 
   summarise(nobs = n())
 
@@ -109,9 +85,229 @@ head(arrange(daily_hits, desc(nobs)))
 
 ```
 
+
+```{r plot_diagnostics_all_isBigCount}
+
+ggplot(df.alltags, aes(sig, fill = isBigCount, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Signal (dB)")
+
+ggplot(df.alltags, aes(sigsd, fill = isBigCount, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Std. dev. signal (dB)")
+
+ggplot(df.alltags, aes(noise, fill = isBigCount, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Noise (dB)")
+
+ggplot(df.alltags, aes(sig/noise, fill = isBigCount, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Signal/noise")
+
+ggplot(df.alltags, aes(freq, fill = isBigCount, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Frequency (Hz)")
+
+ggplot(df.alltags, aes(freqsd, fill = isBigCount, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Frequency std. dev. (Hz)")
+
+ggplot(df.alltags, aes(slop, fill = isBigCount, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Slop")
+
+ggplot(df.alltags, aes(burstSlop, fill = isBigCount, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "burst slop")
+
+ggplot(df.alltags, aes(noise, fill = isBigCount, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Noise (dB)")
+
+
+```
+
+
+```{r plot_diagnostics_all_isJune30}
+
+ggplot(df.alltags, aes(sig, fill = isJune30, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Signal (dB)")
+
+ggplot(df.alltags, aes(sigsd, fill = isJune30, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Std. dev. signal (dB)")
+
+ggplot(df.alltags, aes(noise, fill = isJune30, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Noise (dB)")
+
+ggplot(df.alltags, aes(sig/noise, fill = isJune30, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Signal/noise")
+
+ggplot(df.alltags, aes(freq, fill = isJune30, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Frequency (Hz)")
+
+ggplot(df.alltags, aes(freqsd, fill = isJune30, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Frequency std. dev. (Hz)")
+
+ggplot(df.alltags, aes(slop, fill = isJune30, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "Slop")
+
+ggplot(df.alltags, aes(burstSlop, fill = isJune30, alpha = 0.7)) +
+  geom_histogram(stat = "density", position = "identity") +
+  labs(title = "burst slop")
+
+# ggplot(df.alltags, aes(noise, fill = isJune30, alpha = 0.7)) +
+#   geom_histogram(stat = "density", position = "identity") +
+#   labs(title = "Noise (dB)")
+# 
+
+```
+
+## Check around bad data
+
 Get smaller data set around the bad section
 
 ```{r subset_time_series}
+start_date <- as.POSIXct("2020-06-01", tz = "UTC")
+end_date <- as.POSIXct("2020-08-15", tz = "UTC")
+df_june <- df.alltags %>% 
+  filter(ts >= start_date & ts <= end_date)
+```
+
+
+
+```{r check_subset_time_series}
+df_june %>% 
+  mutate(obs_date = as.Date(ts)) %>% 
+  group_by(obs_date) %>% 
+  summarise(nobs = n()) %>% 
+  ggplot(aes(date(obs_date), nobs)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Number of observations/day",
+       x = "Date",
+       y = "Daily observations")
+
+
+```
+
+```{r plot_diagnostics}
+
+ggplot(df_june, aes(ts, sig)) +
+  geom_point() +
+  labs(title = "Signal (dB)",
+       x = "Date")
+
+ggplot(df_june, aes(ts, sigsd)) +
+  geom_point() +
+  labs(title = "Std. dev. signal (dB)",
+       x = "Date")
+
+ggplot(df_june, aes(ts, noise)) +
+  geom_point() +
+  labs(title = "Noise (dB)",
+       x = "Date")
+
+ggplot(df_june, aes(ts, sig/noise)) +
+  geom_point() +
+  labs(title = "Signal/noise",
+       x = "Date")
+
+ggplot(df_june, aes(ts, freq)) +
+  geom_point() +
+  labs(title = "Frequency (Hz)",
+       x = "Date")
+
+ggplot(df_june, aes(ts, freqsd)) +
+  geom_point() +
+  labs(title = "Frequency std. dev. (Hz)",
+       x = "Date")
+
+ggplot(df_june, aes(ts, slop)) +
+  geom_point() +
+  labs(title = "Slop)",
+       x = "Date")
+
+ggplot(df_june, aes(ts, burstSlop)) +
+  geom_point() +
+  labs(title = "burst slop)",
+       x = "Date")
+
+# ggplot(df_june, aes(ts, noise)) +
+#   geom_point() +
+#   labs(title = "Noise (dB)",
+#        x = "Date")
+# 
+
+```
+
+## June 30 only
+```{r subset_time_series_june30}
+start_date <- as.POSIXct("2020-06-30 00:00:00", tz = "UTC")
+end_date <- as.POSIXct("2020-06-30 23:59:59", tz = "UTC")
+june_30_only <- df.alltags %>% 
+  filter(ts >= start_date & ts <= end_date)
+```
+
+```{r check_subset_time_series_june30}
+june_30_only %>% 
+  mutate(obs_date = as.Date(ts)) %>% 
+  group_by(obs_date) %>% 
+  summarise(nobs = n()) %>% 
+  ggplot(aes(date(obs_date), nobs)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Number of observations/day",
+       x = "Date",
+       y = "Daily observations")
+
+
+```
+
+```{r plot_diagnostics_june30}
+
+ggplot(june_30_only, aes(sig)) +
+  geom_histogram(stat = "density") +
+  labs(title = "Signal (dB)")
+
+ggplot(june_30_only, aes(sigsd)) +
+  geom_histogram(stat = "density") +
+  labs(title = "Std. dev. signal (dB)")
+
+ggplot(june_30_only, aes(noise)) +
+  geom_histogram(stat = "density") +
+  labs(title = "Noise (dB)")
+
+ggplot(june_30_only, aes(sig/noise)) +
+  geom_histogram(stat = "density") +
+  labs(title = "Signal/noise")
+
+ggplot(june_30_only, aes(freq)) +
+  geom_histogram(stat = "density") +
+  labs(title = "Frequency (Hz)")
+
+ggplot(june_30_only, aes(freqsd)) +
+  geom_histogram(stat = "density") +
+  labs(title = "Frequency std. dev. (Hz)")
+
+ggplot(june_30_only, aes(slop)) +
+  geom_histogram(stat = "density") +
+  labs(title = "Slop")
+
+ggplot(june_30_only, aes(burstSlop)) +
+  geom_histogram(stat = "density") +
+  labs(title = "burst slop")
+
+# ggplot(june_30_only, aes(noise)) +
+#   geom_histogram(stat = "density") +
+#   labs(title = "Noise (dB)")
+# 
 
 ```
 
