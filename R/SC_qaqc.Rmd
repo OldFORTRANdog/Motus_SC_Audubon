@@ -26,9 +26,10 @@ suppressPackageStartupMessages({
 
 ```{r set_environment}
 Sys.setenv(TZ = "UTC")
+theme_set(theme_light)
 ```
 
-Getting sample data, use "motus.sample" for user and password for this sample data.  If you screw it up, use `motusLogout()`.
+Need to login, so run this next section manually. If you screw it up, use `motusLogout()`.
 
 ```{r get_one_receiver_data}
 proj.num <- "SG-329ERPI3DD60"
@@ -50,27 +51,26 @@ dbListTables(sql.file)
 
 dbListFields(sql.file, "hits")
 
-tbl.alltags <- tbl(sql.file, "alltags")
-
-str(tbl.alltags)
-
-tbl.alltags %>% 
-  collect() %>%
-  names() # list the variable names in the table
-
 ```
 
 No GPS for this receiver, so don't try to get any.
 
 
-Convert to data frame to make things more _normal_.
+Convert to data frame to make things more _normal_, loading only some of the attributes.
 
 Timestamp (`ts`) is seconds since Jan. 1970.  Convert to datetime with {lubridate}.
 
 ```{r convert_to_df_and_fix_time}
+# tbl.alltags <- tbl(sc_rcvr.motus, "alltags")
+tbl.alltags <- tbl(sql.file, "alltags")
+# str(tbl.alltags)
+
+# tbl.alltags %>% 
+#   collect() %>%
+#   names() # list the variable names in the table
 
 df.alltags <- tbl.alltags %>% 
-  select(-c(tsCorrected, deviceID:antHeight)) %>% 
+  select(-c(tsCorrected, deviceID:antHeight)) %>%
   collect() %>% 
   as.data.frame() %>%     # for all fields in the df (data frame)
   mutate(ts = as_datetime(ts, tz = "UTC", origin = "1970-01-01"))
@@ -78,26 +78,40 @@ df.alltags <- tbl.alltags %>%
 names(df.alltags)     # field names
 str(df.alltags)       # structure of your data fields
 head(df.alltags)      # prints the first 6 rows of your df to the console
+tail(df.alltags)
 summary(df.alltags)   # summary of each column in your df
+
+all(is.na(df.alltags$speciesEN))
 ```
 
-Can load subsets of full table using {dplyr}.
+```{r plot_hits_through_time}
+daily_hits <- df.alltags %>% 
+  mutate(obs_date = as.Date(ts)) %>% 
+  group_by(obs_date) %>% 
+  summarise(nobs = n())
 
-Can select just some variables:
+ggplot(daily_hits, aes(date(obs_date), nobs)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Number of observations/day",
+       x = "Date",
+       y = "Daily observations")
 
-```{r load_select_variables}
-# to grab a subset of variables, in this case a unique list of Motus tag IDs at
-# each receiver and antenna.
-df.alltagsSub <- tbl.alltags %>%
-  select(recv, port, motusTagID) %>%
-  distinct() %>% 
-  collect() %>% 
-  as.data.frame() 
+ggplot(daily_hits, aes(date(obs_date), nobs)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Number of observations/day",
+       x = "Date",
+       y = "Daily observations") +
+  xlim(c(date("2020-06-15"), date("2020-08-01")))
 
-names(df.alltagsSub)     # field names
-str(df.alltagsSub)       # structure of your data fields
-head(df.alltagsSub)      # prints the first 6 rows of your df to the console
-summary(df.alltagsSub)   # summary of each column in your df
+head(arrange(daily_hits, desc(nobs)))
+
+```
+
+Get smaller data set around the bad section
+
+```{r subset_time_series}
 
 ```
 
