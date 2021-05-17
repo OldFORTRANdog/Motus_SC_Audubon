@@ -58,7 +58,23 @@ head(df.alltags)      # prints the first 6 rows of your df to the console
 tail(df.alltags)
 summary(df.alltags)   # summary of each column in your df
 
-all(is.na(df.alltags$speciesEN))
+
+```
+
+
+
+```{r explore_variables}
+foo <- df.alltags %>% 
+  filter(!is.na(ambigID)) 
+
+table(foo$isBigCount)
+table(foo$nomFreq)
+
+bar <- df.alltags %>% 
+  filter(isBigCount == "Not Big Count")
+table(bar$tagDeployStart)
+table(df.alltags$tagDeployStart)
+table(june_30_only$tagDeployStart, useNA = "ifany")
 ```
 
 ```{r plot_hits_through_time}
