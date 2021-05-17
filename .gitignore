@@ -4,4 +4,6 @@
 .Ruserdata
 *_cache/
 R/*_files/
+*.html
+*.pdf
 data/
